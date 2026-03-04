@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "console.h"
 
 /* Linker script symbols */
 extern uint32_t _text_start;
@@ -83,6 +84,9 @@ __attribute__((used, noreturn)) void _c_reset_handler(void)
     
     /* Zero BSS section */
     zero_bss();
+    
+    /* Initialize console for UART output */
+    console_init();
     
     /* Call main */
     main();

@@ -24,7 +24,7 @@ typedef uint32_t k_tid_t;
 
 /* Architecture specific */
 #ifdef __ARM_ARCH
-    #include <arch/arm/cortex_m/cmsis.h>
+    #include "arch/arm/cortex_m/cmsis.h"
 #endif
 
 /* Interrupt control */
@@ -51,8 +51,8 @@ static inline void irq_unlock(void)
 /* Sleep function - minimal busy wait */
 static inline void k_busy_wait(uint32_t usec)
 {
-    /* Simple busy wait loop */
-    volatile uint32_t count = usec * (SystemCoreClock / 1000000) / 4;
+    /* Simple busy wait loop - assume 25MHz system clock for MPS2 AN385 */
+    volatile uint32_t count = usec * (25000000 / 1000000) / 4;
     while (count--) {
         __asm__ volatile ("nop");
     }
@@ -70,21 +70,13 @@ static inline void k_usleep(uint32_t usec)
     k_busy_wait(usec);
 }
 
-/* printk - minimal implementation */
-#include <arch/arm/drivers/uart.h>
+/* Console and printk support */
+#include "console.h"
 
-static inline int printk(const char *fmt, ...)
-{
-    /* Minimal printk that just outputs to UART0 */
-    uart_init(0, 115200);
-    
-    /* For now, just print the string directly if it has no format specifiers */
-    const char *p = fmt;
-    while (*p) {
-        uart_putc(0, *p++);
-    }
-    
-    return 0;
-}
+/* Semihosting support (for debugging) */
+#include "arch/arm/semihosting.h"
+
+/* UART driver support */
+#include "arch/arm/drivers/uart.h"
 
 #endif /* MINIMAL_ZEPHYR_H */

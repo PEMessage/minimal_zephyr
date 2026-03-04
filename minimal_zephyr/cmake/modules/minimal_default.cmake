@@ -48,6 +48,7 @@ function(minimal_zephyr_app)
   target_sources(app PRIVATE
     ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/vector_table.c
     ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/system_clock.c
+    ${MINIMAL_ZEPHYR_BASE}/drivers/console.c
   )
   
   # Create the final ELF - use startup.c as the required source

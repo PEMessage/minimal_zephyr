@@ -1,29 +1,25 @@
 /*
  * Copyright (c) 2024
- * Minimal Application - Hello World
+ * Minimal Application - Hello World with UART
  */
 
 #include "minimal_zephyr.h"
-#include "arch/arm/semihosting.h"
 
 int main(void)
 {
-    /* Use semihosting for output (works with QEMU -semihosting) */
-    semihosting_puts("\n");
-    semihosting_puts("========================================\n");
-    semihosting_puts("  Minimal Zephyr App Started!\n");
-    semihosting_puts("  This is a custom application.\n");
-    semihosting_puts("========================================\n");
-    semihosting_puts("\n");
+    /* Use printk for output (outputs to UART0) */
+    printk("\n");
+    printk("========================================\n");
+    printk("  Minimal Zephyr App Started!\n");
+    printk("  This is a custom application.\n");
+    printk("  UART output is now working!\n");
+    printk("========================================\n");
+    printk("\n");
     
     int counter = 0;
     
     while (1) {
-        semihosting_puts("Custom app running... Count: ");
-        
-        /* Simple counter output */
-        char buf[2] = {'0' + (counter % 10), '\n'};
-        semihosting_puts(buf);
+        printk("Custom app running... Count: %d\n", counter);
         
         counter++;
         
