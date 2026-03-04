@@ -4,21 +4,31 @@
  */
 
 #include "../include/console.h"
-#include "../include/arch/arm/drivers/uart.h"
-#include "../include/arch/arm/semihosting.h"
+
+/* Architecture-specific includes */
+#if defined(CONFIG_ARCH_ARM) || defined(__ARM_ARCH)
+    #include "../include/arch/arm/drivers/uart.h"
+    #include "../include/arch/arm/semihosting.h"
+    #define ARCH_ARM 1
+#elif defined(CONFIG_ARCH_RISCV) || defined(__riscv)
+    #include "../include/arch/riscv/drivers/uart.h"
+    #define ARCH_RISCV 1
+#else
+    /* Default to ARM if not specified */
+    #include "../include/arch/arm/drivers/uart.h"
+    #include "../include/arch/arm/semihosting.h"
+    #define ARCH_ARM 1
+#endif
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 
-/* Default character output function - starts with semihosting for early boot */
+/* Default character output function - starts NULL until init */
 static console_char_out_fn_t _char_out = NULL;
 
 /* Forward declarations for output functions */
 int uart_putc_out(char c);
-int semihosting_putc_out(char c);
-
-/* Internal buffer for number conversion */
-#define PRINTF_BUF_SIZE 64
 
 /* Console initialization - sets up UART as output */
 int console_init(void)
@@ -29,13 +39,6 @@ int console_init(void)
     /* Install UART output function */
     _char_out = uart_putc_out;
     
-    return 0;
-}
-
-/* Early console initialization - uses semihosting for very early output */
-int early_console_init(void)
-{
-    _char_out = semihosting_putc_out;
     return 0;
 }
 
@@ -55,14 +58,6 @@ console_char_out_fn_t console_get_char_out(void)
 int uart_putc_out(char c)
 {
     uart_putc(0, c);
-    return 0;
-}
-
-/* Wrapper for semihosting to match signature */
-int semihosting_putc_out(char c)
-{
-    char str[2] = {c, '\0'};
-    semihosting_puts(str);
     return 0;
 }
 
@@ -99,16 +94,6 @@ int console_write(const char *buf, size_t len)
         console_putchar(buf[i]);
     }
     return len;
-}
-
-/* Internal: output a character through the current output function */
-static int char_out(int c, void *ctx)
-{
-    (void)ctx;
-    if (_char_out) {
-        _char_out((char)c);
-    }
-    return c;
 }
 
 /* Minimal vsnprintf implementation */
@@ -342,17 +327,4 @@ int printk(const char *fmt, ...)
     va_end(ap);
     
     return ret;
-}
-
-/* Early printk using semihosting (for use before UART init) */
-void early_printk(const char *fmt, ...)
-{
-    va_list ap;
-    char buf[128];
-    
-    va_start(ap, fmt);
-    vsnprintk(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    
-    semihosting_puts(buf);
 }

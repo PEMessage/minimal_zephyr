@@ -16,14 +16,29 @@ if(NOT DEFINED BOARD)
   message(STATUS "Board not specified, defaulting to ${BOARD}")
 endif()
 
-# Include toolchain configuration
-include(minimal_toolchain)
+message(STATUS "Selected board: ${BOARD}")
+
+# Include board configuration first (sets ARCH and other board-specific vars)
+include(${MINIMAL_ZEPHYR_BASE}/boards/${BOARD}/board.cmake)
+
+# Include architecture-specific toolchain configuration
+if(NOT DEFINED ARCH)
+  message(FATAL_ERROR "Board ${BOARD} did not define ARCH")
+endif()
+
+message(STATUS "Target architecture: ${ARCH}")
+
+# Include the appropriate toolchain file based on architecture
+if(ARCH STREQUAL "arm")
+  include(${MINIMAL_ZEPHYR_BASE}/cmake/toolchains/arm.cmake)
+elseif(ARCH STREQUAL "riscv")
+  include(${MINIMAL_ZEPHYR_BASE}/cmake/toolchains/riscv.cmake)
+else()
+  message(FATAL_ERROR "Unsupported architecture: ${ARCH}")
+endif()
 
 # Include linker configuration
 include(minimal_linker)
-
-# Include board configuration
-include(${MINIMAL_ZEPHYR_BASE}/boards/${BOARD}/board.cmake)
 
 # Function to create the app target
 function(minimal_zephyr_app)
@@ -44,16 +59,25 @@ function(minimal_zephyr_app)
     ${APPLICATION_BINARY_DIR}/include
   )
   
-  # Add board-specific sources (startup.c is added to zephyr.elf directly)
-  target_sources(app PRIVATE
-    ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/vector_table.c
-    ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/system_clock.c
-    ${MINIMAL_ZEPHYR_BASE}/drivers/console.c
-  )
+  # Add architecture-specific sources
+  if(ARCH STREQUAL "arm")
+    target_sources(app PRIVATE
+      ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/vector_table.c
+      ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/system_clock.c
+      ${MINIMAL_ZEPHYR_BASE}/drivers/console.c
+    )
+    set(STARTUP_SOURCE ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/startup.c)
+  elseif(ARCH STREQUAL "riscv")
+    target_sources(app PRIVATE
+      ${MINIMAL_ZEPHYR_BASE}/arch/riscv/core/startup.c
+      ${MINIMAL_ZEPHYR_BASE}/drivers/console.c
+    )
+    set(STARTUP_SOURCE ${MINIMAL_ZEPHYR_BASE}/arch/riscv/core/startup.c)
+  endif()
   
   # Create the final ELF - use startup.c as the required source
   # All other code comes from the linked app library
-  add_executable(zephyr.elf ${MINIMAL_ZEPHYR_BASE}/arch/arm/core/startup.c)
+  add_executable(zephyr.elf ${STARTUP_SOURCE})
   
   # Link app library (which contains all other sources including main)
   target_link_libraries(zephyr.elf PRIVATE app)
@@ -65,15 +89,32 @@ function(minimal_zephyr_app)
   )
   
   # Configure linker script and flags
-  set_target_properties(zephyr.elf PROPERTIES
-    LINK_FLAGS "-T${MINIMAL_ZEPHYR_BASE}/boards/${BOARD}/linker.ld -specs=nano.specs -lc -lm -lnosys -Wl,--gc-sections -Wl,-Map=${APPLICATION_BINARY_DIR}/zephyr.map"
-  )
+  if(ARCH STREQUAL "riscv")
+    # RISC-V uses -nostdlib since we don't have newlib installed
+    set_target_properties(zephyr.elf PROPERTIES
+      LINK_FLAGS "-nostdlib -T${MINIMAL_ZEPHYR_BASE}/boards/${BOARD}/linker.ld ${LINKER_FLAGS} -Wl,--gc-sections -Wl,-Map=${APPLICATION_BINARY_DIR}/zephyr.map"
+    )
+  else()
+    set_target_properties(zephyr.elf PROPERTIES
+      LINK_FLAGS "-T${MINIMAL_ZEPHYR_BASE}/boards/${BOARD}/linker.ld ${LINKER_FLAGS} -Wl,--gc-sections -Wl,-Map=${APPLICATION_BINARY_DIR}/zephyr.map"
+    )
+  endif()
   
   # Set target properties
   set_target_properties(zephyr.elf PROPERTIES
     SUFFIX ".elf"
     RUNTIME_OUTPUT_DIRECTORY ${APPLICATION_BINARY_DIR}
   )
+  
+  # Add QEMU run target if defined
+  if(DEFINED QEMU_COMMAND)
+    add_custom_target(qemu
+      COMMAND ${QEMU_COMMAND} -kernel $<TARGET_FILE:zephyr.elf>
+      DEPENDS zephyr.elf
+      COMMENT "Running QEMU for ${BOARD}"
+      USES_TERMINAL
+    )
+  endif()
   
   message(STATUS "Minimal Zephyr app configured for board: ${BOARD}")
 endfunction()
